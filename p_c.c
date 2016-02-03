@@ -32,18 +32,26 @@ void treat_semaphore_error(int errno) {
 	if(errno != 0) exit(EXIT_FAILURE);
 }
 
-void up(int caller, int sem_name, sem_t s) {
-	treat_semaphore_error(sem_wait(&s));
+void down(int caller, int sem_name, int order, sem_t s) {
 	int value; 
-	  sem_getvalue(&s, &value); 
-	  printf("The value of %s#%s is %d\n", (caller == 0) ? "producer" : "consumer",(sem_name == 0) ? "empty" : "full" , value);
+	sem_getvalue(&s, &value); 
+	printf("The value of %s(%d)#%s is %d\n", (caller == 0) ? "producer" : "consumer", order, (sem_name == 0) ? "empty" : "full", value);
+
+	treat_semaphore_error(sem_wait(&s));
+
+	sem_getvalue(&s, &value); 
+	printf("The value of %s(%d)#%s is %d\n", (caller == 0) ? "producer" : "consumer", order, (sem_name == 0) ? "empty" : "full", value);
 }
 
-void down(int caller, int sem_name, sem_t s) {
-	treat_semaphore_error(sem_post(&s));
+void up(int caller, int sem_name, int order, sem_t s) {
 	int value; 
-      sem_getvalue(&s, &value); 
-      printf("The value of %s#%s is %d\n", (caller == 0) ? "producer" : "consumer",(sem_name == 0) ? "empty" : "full" , value);
+	sem_getvalue(&s, &value); 
+	printf("The value of %s(%d)#%s is %d\n", (caller == 0) ? "producer" : "consumer", order, (sem_name == 0) ? "empty" : "full", value);
+
+	treat_semaphore_error(sem_post(&s));
+
+	sem_getvalue(&s, &value); 
+	printf("The value of %s(%d)#%s is %d\n", (caller == 0) ? "producer" : "consumer", order, (sem_name == 0) ? "empty" : "full", value);
 }
 
 /*---------------------------------------------------*/
@@ -52,13 +60,15 @@ void treat_mutex_error(int errno) {
 	if(errno != 0) exit(EXIT_FAILURE);
 }
 
+void down_mutex(pthread_mutex_t s) {
+  treat_mutex_error(pthread_mutex_trylock(&s));
+}
+
 void up_mutex(pthread_mutex_t s) {
   	treat_mutex_error(pthread_mutex_unlock(&s));
 }
 
-void down_mutex(pthread_mutex_t s) {
-  treat_mutex_error(pthread_mutex_lock(&s));
-}
+
 
 void show_thread_error(int error) {
 	if(error) {
@@ -108,8 +118,18 @@ void initialize_buffer() {
 	buffer.last_out_index = 0;
 
 	pthread_mutex_init(&(buffer.mutex),NULL);
-	sem_init(&(buffer.full_spaces), 0, 0);
-	sem_init(&(buffer.empty_spaces), 0, BUFFER_SIZE);
+	sem_init(&(buffer.full_spaces), 1, 0);
+	sem_init(&(buffer.empty_spaces), 1, BUFFER_SIZE);
+
+	int value; 
+
+	sem_getvalue(&buffer.empty_spaces, &value);
+	printf("empty initialized with %d\n", value);
+
+	sem_getvalue(&buffer.full_spaces, &value);
+	printf("full initialized with %d\n", value);
+
+	printf("\n\n");
 }
 
 void push(int item, int id) {
@@ -138,29 +158,30 @@ int produce() {
 	return 1+rand()%9;
 }
 
-/*int consume(index) {
-	printf("%d\n", pop());
-}*/
-
 void *producer(void *order) {
-	int number = produce();
 
-	down(0, 0, buffer.empty_spaces);
-	down_mutex(buffer.mutex);
-	push(number, (int)(intptr_t)order);
-	up_mutex(buffer.mutex);
-	up(0, 1, buffer.full_spaces);
+	while(1) {
+		sleep(2);
+		int number = produce();
 
+		down(0, 0,(int)(intptr_t)order, buffer.empty_spaces);
+		down_mutex(buffer.mutex);
+		push(number, (int)(intptr_t)order);
+		up_mutex(buffer.mutex);
+		up(0, 1,(int)(intptr_t)order, buffer.full_spaces);
+	}
 	return NULL;
 }
 
 void *consumer(void *order) {
-	down(1, 1, buffer.full_spaces);
-	down_mutex(buffer.mutex);
-	int number = pop((int)(intptr_t)order);
-	up_mutex(buffer.mutex);
-	up(1, 0, buffer.empty_spaces);
-
+	while(1) {
+		sleep(2);
+		down(1, 1, (int)(intptr_t)order, buffer.full_spaces);
+		down_mutex(buffer.mutex);
+		int number = pop((int)(intptr_t)order);
+		up_mutex(buffer.mutex);
+		up(1, 0, (int)(intptr_t)order, buffer.empty_spaces);
+	}
 	return NULL;
 }
 
@@ -170,8 +191,8 @@ void *consumer(void *order) {
 int main(void) {
 	initialize_buffer();
 	srand( (unsigned)time(NULL) );
-	create_consumers();
 	create_producers();
+	create_consumers();
 	resume_producers();
 	resume_consumers();
 }
