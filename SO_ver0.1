@@ -42,9 +42,9 @@ void produce(void* id) {
 void* producer(void* producerID) {
     while(stop == 0){
         sem_wait(&sProd);
-        sem_wait(&mutualLock);
+        pthread_mutex_lock(&mutualLock);
         produce(producerID);
-        sem_post(&mutualLock);
+        pthread_mutex_unlock(&mutualLock);
         sem_post(&sCons);
     }
     pthread_exit(NULL);
@@ -53,9 +53,9 @@ void* producer(void* producerID) {
 void* consumer(void* consumerID) {
     while(stop == 0){
         sem_wait(&sCons);
-        sem_wait(&mutualLock);
+        pthread_mutex_lock(&mutualLock);
         consume(consumerID);
-        sem_post(&mutualLock);
+        pthread_mutex_unlock(&mutualLock);
         sem_post(&sProd);
     }
     pthread_exit(NULL);
