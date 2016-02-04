@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1454560061 source:c:\users\bruno\desktop\c_projects\trabalhoso\main.c
+	<stdio.h>
+	<stdlib.h>
+	<semaphore.h>
+	<pthread.h>
+
